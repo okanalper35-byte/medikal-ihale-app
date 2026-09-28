@@ -2,22 +2,16 @@ import streamlit as st
 import pandas as pd
 import firebase_admin
 from firebase_admin import credentials, firestore
-import json
 import os
 
-# --- OTOMATİK DÜZELTMELİ KESİN FIREBASE BAĞLANTISI ---
+# --- DOĞRUDAN DOSYADAN KUSURSUZ FIREBASE BAĞLANTISI ---
 if not firebase_admin._apps:
     try:
-        if "firebase" in st.secrets:
-            cred_dict = dict(st.secrets["firebase"])
-            # Özel anahtardaki \n bozulmalarını otomatik düzeltir
-            if "private_key" in cred_dict:
-                cred_dict["private_key"] = cred_dict["private_key"].replace("\\n", "\n")
-            cred = credentials.Certificate(cred_dict)
-            firebase_admin.initialize_app(cred)
-        elif os.path.exists("serviceAccountKey.json"):
+        if os.path.exists("serviceAccountKey.json"):
             cred = credentials.Certificate("serviceAccountKey.json")
             firebase_admin.initialize_app(cred)
+        else:
+            st.error("⚠️ serviceAccountKey.json dosyası bulunamadı! Lütfen sol taraftaki dosya listesine yükleyin.")
     except Exception as e:
         st.error(f"Firebase Bağlantı Hatası: {e}")
 
@@ -51,7 +45,7 @@ if not st.session_state.logged_in:
             else:
                 st.error("❌ Bu e-posta adresi yetkilendirilmemiş.")
         else:
-            st.error("Veritabanı bağlantısı kurulamadı. Secrets ayarlarını kontrol edin.")
+            st.error("Veritabanı bağlantısı yok.")
 else:
     c1, c2 = st.columns([3, 1])
     with c1:

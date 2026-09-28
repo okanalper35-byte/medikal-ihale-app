@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import firebase_admin
 from firebase_admin import credentials, firestore
-import json
 
 # Firebase Başlatma
 if not firebase_admin._apps:
@@ -29,29 +28,27 @@ if "logged_in" not in st.session_state:
 # --- GİRİŞ EKRANI ---
 if not st.session_state.logged_in:
     st.markdown("<h2 style='text-align: center;'>🛡️ Medikal İhale Takip Sistemi</h2>", unsafe_allow_html=True)
-    with st.form("login"):
-        email = st.text_input("E-posta Adresiniz:")
-        submitted = st.form_submit_button("Güvenli Giriş Yap", use_container_width=True)
-        
-        if submitted:
-            if email.strip() == "okan.alper@icloud.com":
+    
+    # Form yerine normal input (değer kaybı olmaması için)
+    email = st.text_input("E-posta Adresiniz:")
+    if st.button("Güvenli Giriş Yap", use_container_width=True):
+        if email.strip() == "okan.alper@icloud.com":
+            st.session_state.logged_in = True
+            st.session_state.user_email = email
+            st.session_state.is_admin = True
+            st.rerun()
+        elif db:
+            doc = db.collection("allowed_users").document(email.strip()).get()
+            if doc.exists:
                 st.session_state.logged_in = True
                 st.session_state.user_email = email
-                st.session_state.is_admin = True
+                st.session_state.is_admin = False
                 st.rerun()
-            elif db:
-                doc = db.collection("allowed_users").document(email.strip()).get()
-                if doc.exists:
-                    st.session_state.logged_in = True
-                    st.session_state.user_email = email
-                    st.session_state.is_admin = False
-                    st.rerun()
-                else:
-                    st.error("❌ Bu e-posta adresi yetkilendirilmemiş.")
             else:
-                st.error("Veritabanı bağlantısı kurulamadı.")
+                st.error("❌ Bu e-posta adresi yetkilendirilmemiş.")
+        else:
+            st.error("Veritabanı bağlantısı kurulamadı.")
 else:
-    # Üst Bilgi ve Çıkış
     c1, c2 = st.columns([3, 1])
     with c1:
         st.write(f"👤 **{st.session_state.user_email}**")
@@ -68,34 +65,37 @@ else:
         
         with tab1:
             st.subheader("EKAP / İhale Dosyalarını Yükle ve Analiz Et")
-            ikn = st.text_input("İhale Kayıt Numarası (İKN):", placeholder="Örn: 2026/1503681")
-            kurum = st.text_input("İdarenin Adı:")
-            tarih = st.text_input("İhale Tarihi:")
-            ihale_adi = st.text_input("İhalenin Adı:")
             
-            # Dosya Yükleme Alanları (İstediğin İki Dosya)
+            # Formsuz doğrudan inputlar
+            ikn = st.text_input("İhale Kayıt Numarası (İKN):", key="input_ikn", placeholder="Örn: 2026/1503681")
+            kurum = st.text_input("İdarenin Adı:", key="input_kurum")
+            tarih = st.text_input("İhale Tarihi:", key="input_tarih")
+            ihale_adi = st.text_input("İhalenin Adı:", key="input_ihale_adi")
+            
             st.markdown("---")
             st.write("📁 **İhale Dokümanları ve Analiz Dosyaları**")
             ekap_dosya = st.file_uploader("1. EKAP / İhale Dokümanı (Excel veya PDF)", type=["xlsx", "xls", "pdf"])
             teklif_dosya = st.file_uploader("2. Yaklaşım / Birim Fiyat Matrisi (Excel)", type=["xlsx", "xls"])
             
             if st.button("Analiz Et ve Buluta Kaydet", type="primary"):
-                if ikn and db:
-                    # Dosyalar yüklendiyse buradan otomatik analiz tetiklenebilir
-                    dosya_bilgisi = "Yüklendi" if ekap_dosya or teklif_dosya else "Dosyasız"
-                    
-                    db.collection("tenders").document(ikn.replace("/", "_")).set({
-                        "ikn": ikn,
-                        "kurum": kurum,
-                        "tarih": tarih,
-                        "ihale_adi": ihale_adi,
-                        "durum": "Aktif",
-                        "dosya_durumu": dosya_bilgisi,
-                        "detay_aciklama": "Bu ihale için yüklenen dokümanlar analiz edilmiştir. Yaklaşık maliyet ve kalem detayları sisteme işlenmiştir."
-                    })
-                    st.success(f"✅ İKN: {ikn} başarıyla analiz edilip buluta kaydedildi!")
+                if ikn and ikn.strip() != "":
+                    if db:
+                        dosya_bilgisi = "Yüklendi" if ekap_dosya or teklif_dosya else "Dosyasız"
+                        
+                        db.collection("tenders").document(ikn.strip().replace("/", "_")).set({
+                            "ikn": ikn.strip(),
+                            "kurum": kurum,
+                            "tarih": tarih,
+                            "ihale_adi": ihale_adi,
+                            "durum": "Aktif",
+                            "dosya_durumu": dosya_bilgisi,
+                            "detay_aciklama": "Bu ihale için yüklenen dokümanlar analiz edilmiştir. Yaklaşık maliyet ve kalem detayları sisteme işlenmiştir."
+                        })
+                        st.success(f"✅ İKN: {ikn} başarıyla analiz edilip buluta kaydedildi!")
+                    else:
+                        st.error("Veritabanı bağlantısı yok.")
                 else:
-                    st.error("Lütfen İKN alanını doldurun.")
+                    st.error("⚠️ Lütfen İhale Kayıt Numarası (İKN) alanını boş bırakmayın.")
                     
         with tab2:
             st.subheader("Sistemdeki İhaleler")
@@ -112,17 +112,14 @@ else:
                 db.collection("allowed_users").document(yeni_mail.strip()).set({"email": yeni_mail.strip()})
                 st.success("Eklendi.")
 
-    # --- KULLANICI / FİRMA LİSTE EKRANI (DETAY GÖRÜNTÜLEME) ---
+    # --- KULLANICI / FİRMA LİSTE EKRANI ---
     else:
         st.markdown("### 📋 Aktif İhale Listesi ve Detayları")
-        st.markdown("İhalenin üzerine tıklayarak tüm detayları ve analiz raporunu inceleyebilirsiniz:")
-        
         if db:
             docs = db.collection("tenders").stream()
             t_list = [d.to_dict() for d in docs]
             if t_list:
                 for t in t_list:
-                    # Kullanıcı ihaleye tıkladığında detayları açılır (Expander)
                     with st.expander(f"📌 {t.get('ikn')} - {t.get('kurum')} ({t.get('ihale_adi')})"):
                         st.write(f"**İhale Adı:** {t.get('ihale_adi')}")
                         st.write(f"**İhale Tarihi:** {t.get('tarih')}")
@@ -131,8 +128,6 @@ else:
                         st.markdown("#### 📊 Analiz ve Teklif Detayları")
                         st.info(t.get('detay_aciklama', 'Detay bulunmuyor.'))
                         
-                        # Örnek detay tablo simülasyonu (İleride python ile ayrıştırılan veriler buraya gelecek)
-                        st.write("**Kalem Bazlı Dağılım ve Yaklaşım Özeti:**")
                         sample_data = pd.DataFrame({
                             "Kalem No": ["1", "2"],
                             "Malzeme Açıklaması": ["Medikal Cihaz Sarf Malzemesi A", "Test Kiti B"],

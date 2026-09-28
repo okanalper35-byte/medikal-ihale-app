@@ -2,20 +2,25 @@ import streamlit as st
 import pandas as pd
 import firebase_admin
 from firebase_admin import credentials, firestore
+import json
+import os
 
-# Firebase Başlatma
+# --- KESİN VE HATASIZ FIREBASE BAĞLANTISI ---
 if not firebase_admin._apps:
     try:
         if "firebase" in st.secrets:
+            # Streamlit Cloud Secrets üzerinden bağlanma
             cred_dict = dict(st.secrets["firebase"])
             cred = credentials.Certificate(cred_dict)
             firebase_admin.initialize_app(cred)
-        else:
+        elif os.path.exists("serviceAccountKey.json"):
+            # Lokal dosya üzerinden bağlanma
             cred = credentials.Certificate("serviceAccountKey.json")
             firebase_admin.initialize_app(cred)
     except Exception as e:
-        pass
+        st.error(f"Firebase Bağlantı Hatası: {e}")
 
+# Güvenli Firestore İstemcisi
 db = firestore.client() if firebase_admin._apps else None
 
 st.set_page_config(page_title="Medikal İhale Takip Sistemi", layout="centered")
@@ -29,7 +34,6 @@ if "logged_in" not in st.session_state:
 if not st.session_state.logged_in:
     st.markdown("<h2 style='text-align: center;'>🛡️ Medikal İhale Takip Sistemi</h2>", unsafe_allow_html=True)
     
-    # Form yerine normal input (değer kaybı olmaması için)
     email = st.text_input("E-posta Adresiniz:")
     if st.button("Güvenli Giriş Yap", use_container_width=True):
         if email.strip() == "okan.alper@icloud.com":
@@ -47,7 +51,7 @@ if not st.session_state.logged_in:
             else:
                 st.error("❌ Bu e-posta adresi yetkilendirilmemiş.")
         else:
-            st.error("Veritabanı bağlantısı kurulamadı.")
+            st.error("Veritabanı bağlantısı kurulamadı. Secrets ayarlarını kontrol edin.")
 else:
     c1, c2 = st.columns([3, 1])
     with c1:
@@ -64,9 +68,8 @@ else:
         tab1, tab2, tab3 = st.tabs(["📤 İhale & Dosya Yükle", "📊 Kayıtlı İhaleler", "🔐 Whitelist"])
         
         with tab1:
-            st.subheader("EKAP / İhale Dosyalarını Yükle ve Analiz Et")
+            st.subheader("EKAP / İhale Dokümanlarını Yükle ve Analiz Et")
             
-            # Formsuz doğrudan inputlar
             ikn = st.text_input("İhale Kayıt Numarası (İKN):", key="input_ikn", placeholder="Örn: 2026/1503681")
             kurum = st.text_input("İdarenin Adı:", key="input_kurum")
             tarih = st.text_input("İhale Tarihi:", key="input_tarih")
@@ -74,8 +77,9 @@ else:
             
             st.markdown("---")
             st.write("📁 **İhale Dokümanları ve Analiz Dosyaları**")
-            ekap_dosya = st.file_uploader("1. EKAP / İhale Dokümanı (Excel veya PDF)", type=["xlsx", "xls", "pdf"])
-            teklif_dosya = st.file_uploader("2. Yaklaşım / Birim Fiyat Matrisi (Excel)", type=["xlsx", "xls"])
+            # .docx uzantıları da eklendi
+            ekap_dosya = st.file_uploader("1. EKAP / İhale Dokümanı", type=["xlsx", "xls", "pdf", "docx"])
+            teklif_dosya = st.file_uploader("2. Yaklaşım / Birim Fiyat Matrisi", type=["xlsx", "xls", "docx"])
             
             if st.button("Analiz Et ve Buluta Kaydet", type="primary"):
                 if ikn and ikn.strip() != "":
@@ -93,7 +97,7 @@ else:
                         })
                         st.success(f"✅ İKN: {ikn} başarıyla analiz edilip buluta kaydedildi!")
                     else:
-                        st.error("Veritabanı bağlantısı yok.")
+                        st.error("⚠️ Veritabanı bağlantısı yok. Lütfen Streamlit Cloud 'Secrets' kısmına Firebase anahtarlarını eklediğinizden emin olun.")
                 else:
                     st.error("⚠️ Lütfen İhale Kayıt Numarası (İKN) alanını boş bırakmayın.")
                     
@@ -136,4 +140,4 @@ else:
                         })
                         st.dataframe(sample_data, use_container_width=True)
             else:
-                st.info("Henüz yayınlanmış bir ihale bulunmuyor.")
+                st.info("Henüz yayınlanmış bir ihale bulunvuyor.")

@@ -5,22 +5,22 @@ from firebase_admin import credentials, firestore
 import json
 import os
 
-# --- KESİN VE HATASIZ FIREBASE BAĞLANTISI ---
+# --- OTOMATİK DÜZELTMELİ KESİN FIREBASE BAĞLANTISI ---
 if not firebase_admin._apps:
     try:
         if "firebase" in st.secrets:
-            # Streamlit Cloud Secrets üzerinden bağlanma
             cred_dict = dict(st.secrets["firebase"])
+            # Özel anahtardaki \n bozulmalarını otomatik düzeltir
+            if "private_key" in cred_dict:
+                cred_dict["private_key"] = cred_dict["private_key"].replace("\\n", "\n")
             cred = credentials.Certificate(cred_dict)
             firebase_admin.initialize_app(cred)
         elif os.path.exists("serviceAccountKey.json"):
-            # Lokal dosya üzerinden bağlanma
             cred = credentials.Certificate("serviceAccountKey.json")
             firebase_admin.initialize_app(cred)
     except Exception as e:
         st.error(f"Firebase Bağlantı Hatası: {e}")
 
-# Güvenli Firestore İstemcisi
 db = firestore.client() if firebase_admin._apps else None
 
 st.set_page_config(page_title="Medikal İhale Takip Sistemi", layout="centered")
@@ -77,7 +77,6 @@ else:
             
             st.markdown("---")
             st.write("📁 **İhale Dokümanları ve Analiz Dosyaları**")
-            # .docx uzantıları da eklendi
             ekap_dosya = st.file_uploader("1. EKAP / İhale Dokümanı", type=["xlsx", "xls", "pdf", "docx"])
             teklif_dosya = st.file_uploader("2. Yaklaşım / Birim Fiyat Matrisi", type=["xlsx", "xls", "docx"])
             
@@ -97,7 +96,7 @@ else:
                         })
                         st.success(f"✅ İKN: {ikn} başarıyla analiz edilip buluta kaydedildi!")
                     else:
-                        st.error("⚠️ Veritabanı bağlantısı yok. Lütfen Streamlit Cloud 'Secrets' kısmına Firebase anahtarlarını eklediğinizden emin olun.")
+                        st.error("⚠️ Veritabanı bağlantısı yok.")
                 else:
                     st.error("⚠️ Lütfen İhale Kayıt Numarası (İKN) alanını boş bırakmayın.")
                     
@@ -140,4 +139,4 @@ else:
                         })
                         st.dataframe(sample_data, use_container_width=True)
             else:
-                st.info("Henüz yayınlanmış bir ihale bulunvuyor.")
+                st.info("Henüz yayınlanmış bir ihale bulunmuyor.")
